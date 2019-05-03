@@ -25,11 +25,12 @@ app.get('/weather', weatherApp);
 
 app.get('/events', eventsApp);
 
+app.get('/movies', moviesApp);
+
 //uses google API to fetch coordinate data to send to front end using superagent
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
 function locationApp(request, response) {
-  console.log('QUERY:', request.query.data);
   const googleMapsUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
   return superagent.get(googleMapsUrl)
     .then(result => {
@@ -64,13 +65,14 @@ function queryTable(table, request, response) {
   return client.query(sql, values)
     .then(result => {
       if (result.rowCount > 0) {
-        console.log(result.rowCount);
         response.send(result.rows);
       } else {
         if (table === 'weathers') {
           getWeatherAPI(request, response);
         } else if (table === 'events') {
           getEventsAPI(request, response);
+        } else if (table === 'movies') {
+          getMoviesAPI(request, response);
         }
       }
     })
@@ -118,6 +120,23 @@ function getEventsAPI(req, res) {
     .catch(error => handleError(error, res));
 }
 
+function moviesApp(req, res) {
+  getMoviesAPI(req, res);
+  // queryTable('movies', req, res);
+}
+
+function getMoviesAPI(req, res) {
+  const movieDbUrl = `https://api.themoviedb.org/3/movie/550?api_key=${process.env.MOVIE_API_KEY}`;
+  console.log('URL', movieDbUrl);
+  return superagent.get(movieDbUrl)
+    .then(result => {
+      const movieItem = new Movie(result.body, req.query.data.search_query);
+      console.log(movieItem);
+      res.send(movieItem);
+    })
+    .catch(error => handleError(error, res));
+}
+
 function handleError(err, res) {
   if (res) res.status(500).send('Internal 500 error!');
 }
@@ -144,6 +163,16 @@ function Event(data, location) {
   this.event_date = new Date(data.start.local).toDateString();
   this.summary = data.description.text;
   this.created_at = Date.now();
+}
+
+function Movie(data, location) {
+  this.location = location;
+  this.title = data.original_title;
+  this.overview = data.overview;
+  this.average_votes = data.vote_average;
+  this.image_url = `https://image.tmdb.org/t/p/w500${data.poster_path}`;
+  this.popularity = data.popularity;
+  this.released_on = data.release_date;
 }
 
 app.listen(PORT, () => console.log(`Listening on ${PORT}`));
