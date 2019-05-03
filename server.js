@@ -29,6 +29,7 @@ app.get('/events', eventsApp);
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
 function locationApp(request, response) {
+  console.log('QUERY:', request.query.data);
   const googleMapsUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
   return superagent.get(googleMapsUrl)
     .then(result => {
