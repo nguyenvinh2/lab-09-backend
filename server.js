@@ -230,8 +230,8 @@ function Options(tableName, request, response) {
   };
 }
 
-function deleteTableContents(table, city) {
-  const SQL = `DELETE from ${table} WHERE location_id=${city};`;
+function deleteTableContents(table, id) {
+  const SQL = `DELETE from ${table} WHERE location_id=${id};`;
   return client.query(SQL);
 }
 
