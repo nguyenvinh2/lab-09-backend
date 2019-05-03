@@ -27,6 +27,8 @@ app.get('/events', eventsApp);
 
 app.get('/movies', moviesApp);
 
+app.get('/yelp', yelpApp);
+
 //uses google API to fetch coordinate data to send to front end using superagent
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
@@ -86,6 +88,18 @@ function eventsApp(req, res) {
   queryTable(events, req, res);
 }
 
+function moviesApp(req, res) {
+  const movies = new Options('movies', req, res);
+  movies.cacheMiss = getMoviesAPI;
+  queryTable(movies, req, res);
+}
+
+function yelpApp(req, res) {
+  const yelp = new Options('yelp', req, res);
+  yelp.cacheMiss = getYelpAPI;
+  queryTable(yelp, req, res);
+}
+
 // This section is for API retrieval
 function getWeatherAPI(req, res) {
   const darkSkyUrl = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
@@ -120,19 +134,35 @@ function getEventsAPI(req, res) {
     .catch(error => handleError(error, res));
 }
 
-function moviesApp(req, res) {
-  getMoviesAPI(req, res);
-  // queryTable('movies', req, res);
-}
-
 function getMoviesAPI(req, res) {
-  const movieDbUrl = `https://api.themoviedb.org/3/movie/550?api_key=${process.env.MOVIE_API_KEY}`;
-  console.log('URL', movieDbUrl);
+  const movieDbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&query=${req.query.data.search_query}&page=1&include_adult=false`;
   return superagent.get(movieDbUrl)
     .then(result => {
-      const movieItem = new Movie(result.body, req.query.data.search_query);
-      console.log(movieItem);
-      res.send(movieItem);
+      const movies = result.body.results.map(movie => {
+        const movieItem = new Movie(movie);
+        const SQL = `INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+        const values = [movieItem.title, movieItem.overview, movieItem.average_votes, movieItem.total_votes, movieItem.image_url, movieItem.popularity, movieItem.released_on, movieItem.created_at, req.query.data.id];
+        client.query(SQL, values);
+        return movieItem;
+      });
+      res.send(movies);
+    })
+    .catch(error => handleError(error, res));
+}
+
+function getYelpAPI(req, res) {
+  const yelpURL = `https://api.yelp.com/v3/businesses/search?location=${req.query.data.search_query}`;
+  return superagent.get(yelpURL)
+    .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
+    .then(result => {
+      const yelps = result.body.businesses.map(yelp => {
+        const yelpItem = new Yelp(yelp);
+        const SQL = `INSERT INTO yelp (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+        const values = [yelpItem.name, yelpItem.image_url, yelpItem.price, yelpItem.rating, yelpItem.url,yelpItem.created_at, req.query.data.id];
+        client.query(SQL, values);
+        return yelpItem;
+      });
+      res.send(yelps);
     })
     .catch(error => handleError(error, res));
 }
@@ -166,14 +196,24 @@ function Event(data) {
   this.created_at = Date.now();
 }
 
-function Movie(data, location) {
-  this.location = location;
-  this.title = data.original_title;
+function Movie(data) {
+  this.title = data.title;
   this.overview = data.overview;
   this.average_votes = data.vote_average;
+  this.total_votes = data.vote_count;
   this.image_url = `https://image.tmdb.org/t/p/w500${data.poster_path}`;
   this.popularity = data.popularity;
   this.released_on = data.release_date;
+  this.created_at = Date.now();
+}
+
+function Yelp(data) {
+  this.name = data.name;
+  this.image_url = data.image_url;
+  this.price = data.price;
+  this.rating = data.rating;
+  this.url = data.url;
+  this.created_at = Date.now();
 }
 
 function Options(tableName, request, response) {
@@ -182,7 +222,6 @@ function Options(tableName, request, response) {
   this.cacheHit = (results) => {
     const timeInSeconds = (Date.now() - results[0].created_at) / (1000);
     if (timeInSeconds > 15) {
-      console.log('hammer time', this.name);
       deleteTableContents(this.name, request.query.data.id);
       this.cacheMiss(request, response);
     } else {
@@ -191,8 +230,8 @@ function Options(tableName, request, response) {
   };
 }
 
-function deleteTableContents(table, city) {
-  const SQL = `DELETE from ${table} WHERE location_id=${city};`;
+function deleteTableContents(table, id) {
+  const SQL = `DELETE from ${table} WHERE location_id=${id};`;
   return client.query(SQL);
 }
 
