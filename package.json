@@ -16,5 +16,12 @@
   "bugs": {
     "url": "https://github.com/nguyenvinh2/lab-09-backend/issues"
   },
-  "homepage": "https://github.com/nguyenvinh2/lab-09-backend#readme"
+  "homepage": "https://github.com/nguyenvinh2/lab-09-backend#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^8.0.0",
+    "express": "^4.16.4",
+    "pg": "^7.10.0",
+    "superagent": "^5.0.5"
+  }
 }
