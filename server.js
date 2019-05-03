@@ -25,6 +25,8 @@ app.get('/weather', weatherApp);
 
 app.get('/events', eventsApp);
 
+app.get('/movies', moviesApp);
+
 //uses google API to fetch coordinate data to send to front end using superagent
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
@@ -118,6 +120,23 @@ function getEventsAPI(req, res) {
     .catch(error => handleError(error, res));
 }
 
+function moviesApp(req, res) {
+  getMoviesAPI(req, res);
+  // queryTable('movies', req, res);
+}
+
+function getMoviesAPI(req, res) {
+  const movieDbUrl = `https://api.themoviedb.org/3/movie/550?api_key=${process.env.MOVIE_API_KEY}`;
+  console.log('URL', movieDbUrl);
+  return superagent.get(movieDbUrl)
+    .then(result => {
+      const movieItem = new Movie(result.body, req.query.data.search_query);
+      console.log(movieItem);
+      res.send(movieItem);
+    })
+    .catch(error => handleError(error, res));
+}
+
 function handleError(err, res) {
   if (err) res.status(500).send('Internal 500 error!');
 }
@@ -145,6 +164,16 @@ function Event(data) {
   this.event_date = new Date(data.start.local).toDateString();
   this.summary = data.description.text;
   this.created_at = Date.now();
+}
+
+function Movie(data, location) {
+  this.location = location;
+  this.title = data.original_title;
+  this.overview = data.overview;
+  this.average_votes = data.vote_average;
+  this.image_url = `https://image.tmdb.org/t/p/w500${data.poster_path}`;
+  this.popularity = data.popularity;
+  this.released_on = data.release_date;
 }
 
 function Options(tableName, request, response) {
