@@ -27,6 +27,8 @@ app.get('/events', eventsApp);
 
 app.get('/movies', moviesApp);
 
+app.get('/yelp', yelpApp);
+
 //uses google API to fetch coordinate data to send to front end using superagent
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
@@ -66,7 +68,6 @@ function queryTable(table, request, response) {
       if (result.rowCount > 0) {
         table.cacheHit(result.rows);
       } else {
-        console.log(table);
         table.cacheMiss(request, response);
       }
     })
@@ -91,6 +92,12 @@ function moviesApp(req, res) {
   const movies = new Options('movies', req, res);
   movies.cacheMiss = getMoviesAPI;
   queryTable(movies, req, res);
+}
+
+function yelpApp(req, res) {
+  const yelp = new Options('yelp', req, res);
+  yelp.cacheMiss = getYelpAPI;
+  queryTable(yelp, req, res);
 }
 
 // This section is for API retrieval
@@ -143,6 +150,23 @@ function getMoviesAPI(req, res) {
     .catch(error => handleError(error, res));
 }
 
+function getYelpAPI(req, res) {
+  const yelpURL = `https://api.yelp.com/v3/businesses/search?location=${req.query.data.search_query}`;
+  return superagent.get(yelpURL)
+    .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
+    .then(result => {
+      const yelps = result.body.businesses.map(yelp => {
+        const yelpItem = new Yelp(yelp);
+        const SQL = `INSERT INTO yelp (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+        const values = [yelpItem.name, yelpItem.image_url, yelpItem.price, yelpItem.rating, yelpItem.url,yelpItem.created_at, req.query.data.id];
+        client.query(SQL, values);
+        return yelpItem;
+      });
+      res.send(yelps);
+    })
+    .catch(error => handleError(error, res));
+}
+
 function handleError(err, res) {
   if (err) res.status(500).send('Internal 500 error!');
 }
@@ -180,6 +204,15 @@ function Movie(data) {
   this.image_url = `https://image.tmdb.org/t/p/w500${data.poster_path}`;
   this.popularity = data.popularity;
   this.released_on = data.release_date;
+  this.created_at = Date.now();
+}
+
+function Yelp(data) {
+  this.name = data.name;
+  this.image_url = data.image_url;
+  this.price = data.price;
+  this.rating = data.rating;
+  this.url = data.url;
   this.created_at = Date.now();
 }
 
