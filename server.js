@@ -29,6 +29,8 @@ app.get('/movies', moviesApp);
 
 app.get('/yelp', yelpApp);
 
+app.get('/trails', trailsApp);
+
 //uses google API to fetch coordinate data to send to front end using superagent
 //has a catch method to handle bad user search inputs in case google maps cannot
 //find location
@@ -63,6 +65,7 @@ function queryLocation(request, response) {
 function queryTable(table, request, response) {
   const sql = `SELECT * FROM ${table.name} WHERE location_id = $1`;
   const values = [request.query.data.id];
+  console.log(values);
   return client.query(sql, values)
     .then(result => {
       if (result.rowCount > 0) {
@@ -77,27 +80,33 @@ function queryTable(table, request, response) {
 
 // This section is handling GET routes
 function weatherApp(req, res) {
-  const weather = new Options('weathers', req, res);
+  const weather = new Options('weathers', 15, req, res);
   weather.cacheMiss = getWeatherAPI;
   queryTable(weather, req, res);
 }
 
 function eventsApp(req, res) {
-  const events = new Options('events', req, res);
+  const events = new Options('events', 15, req, res);
   events.cacheMiss = getEventsAPI;
   queryTable(events, req, res);
 }
 
 function moviesApp(req, res) {
-  const movies = new Options('movies', req, res);
+  const movies = new Options('movies', 15, req, res);
   movies.cacheMiss = getMoviesAPI;
   queryTable(movies, req, res);
 }
 
 function yelpApp(req, res) {
-  const yelp = new Options('yelp', req, res);
+  const yelp = new Options('yelp', 15, req, res);
   yelp.cacheMiss = getYelpAPI;
   queryTable(yelp, req, res);
+}
+
+function trailsApp(req, res) {
+  const trails = new Options('trails', 15, req, res);
+  trails.cacheMiss = getTrailsAPI;
+  queryTable(trails, req, res);
 }
 
 // This section is for API retrieval
@@ -125,7 +134,7 @@ function getEventsAPI(req, res) {
       const eventSummaries = result.body.events.map(event => {
         const eventItem = new Event(event, req.query.data.search_query);
         const SQL = `INSERT INTO events (link, name, event_date, summary, location_id, created_at) VALUES ($1, $2, $3, $4, $5, $6);`;
-        const values = [event.url, event.name.text, event.start.local, event.description.text, req.query.data.id, eventItem.created_at];
+        const values = [eventItem.url, eventItem.name, eventItem.event_date, eventItem.summary, req.query.data.id, eventItem.created_at];
         client.query(SQL, values);
         return eventItem;
       });
@@ -158,11 +167,27 @@ function getYelpAPI(req, res) {
       const yelps = result.body.businesses.map(yelp => {
         const yelpItem = new Yelp(yelp);
         const SQL = `INSERT INTO yelp (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
-        const values = [yelpItem.name, yelpItem.image_url, yelpItem.price, yelpItem.rating, yelpItem.url,yelpItem.created_at, req.query.data.id];
+        const values = [yelpItem.name, yelpItem.image_url, yelpItem.price, yelpItem.rating, yelpItem.url, yelpItem.created_at, req.query.data.id];
         client.query(SQL, values);
         return yelpItem;
       });
       res.send(yelps);
+    })
+    .catch(error => handleError(error, res));
+}
+
+function getTrailsAPI(req, res) {
+  const trailURL = `https://www.hikingproject.com/data/get-trails?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&maxDistance=10&key=${process.env.TRAIL_API_KEY}`;
+  return superagent.get(trailURL)
+    .then(result => {
+      const trails = result.body.trails.map(data => {
+        const trailsItem = new Trail(data);
+        const SQL = `INSERT INTO trails (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`;
+        const values = [trailsItem.name, trailsItem.location, trailsItem.length, trailsItem.stars, trailsItem.star_votes, trailsItem.summary, trailsItem.trail_url, trailsItem.conditions, trailsItem.condition_date, trailsItem.condition_time, trailsItem.created_at, req.query.data.id];
+        client.query(SQL, values);
+        return trailsItem;
+      });
+      res.send(trails);
     })
     .catch(error => handleError(error, res));
 }
@@ -192,7 +217,7 @@ function Event(data) {
   this.link = data.url;
   this.name = data.name.text;
   this.event_date = new Date(data.start.local).toDateString();
-  this.summary = data.description.text;
+  this.summary = data.summary;
   this.created_at = Date.now();
 }
 
@@ -216,12 +241,27 @@ function Yelp(data) {
   this.created_at = Date.now();
 }
 
-function Options(tableName, request, response) {
+function Trail(data) {
+  this.name = data.name;
+  this.location = data.location;
+  this.length = data.length;
+  this.stars = data.stars;
+  this.star_votes = data.starVotes;
+  this.summary = data.summary;
+  this.trail_url = data.url;
+  this.conditions = data.conditionStatus;
+  this.condition_date = data.conditionDate.split(' ')[0];
+  this.condition_time = data.conditionDate.split(' ')[1];
+  this.created_at = Date.now();
+}
+
+function Options(tableName, time, request, response) {
   this.name = tableName;
+  this.cacheTime = time;
   this.cacheMiss;
   this.cacheHit = (results) => {
     const timeInSeconds = (Date.now() - results[0].created_at) / (1000);
-    if (timeInSeconds > 15) {
+    if (timeInSeconds > this.cacheTime) {
       deleteTableContents(this.name, request.query.data.id);
       this.cacheMiss(request, response);
     } else {
