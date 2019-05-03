@@ -153,7 +153,6 @@ function Options(tableName, request, response) {
   this.cacheHit = (results) => {
     const timeInSeconds = (Date.now() - results[0].created_at) / (1000);
     if (timeInSeconds > 15) {
-      console.log('hammer time', this.name);
       deleteTableContents(this.name, request.query.data.id);
       this.cacheMiss(request, response);
     } else {
