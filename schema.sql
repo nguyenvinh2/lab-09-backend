@@ -1,8 +1,4 @@
-DROP TABLE IF EXISTS weathers;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS movies;
-DROP TABLE IF EXISTS yelp;
-DROP TABLE IF EXISTS locations;
+DROP TABLE IF EXISTS weathers, events, movies, yelp, trails, locations;
 
 CREATE TABLE IF NOT EXISTS locations ( 
   id SERIAL PRIMARY KEY, 
@@ -53,4 +49,20 @@ CREATE TABLE IF NOT EXISTS yelp (
   url TEXT,
   location_id INTEGER NOT NULL REFERENCES locations(id),
   created_at BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS trails (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255),
+  location VARCHAR(255),
+  length DECIMAL,
+  stars DECIMAL,
+  star_votes DECIMAL,
+  summary TEXT,
+  trail_url VARCHAR(255),
+  conditions TEXT,
+  condition_date VARCHAR(255),
+  condition_time VARCHAR(255),
+  created_at BIGINT,
+  location_id INTEGER NOT NULL REFERENCES locations(id)
 );
