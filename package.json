@@ -1,0 +1,20 @@
+{
+  "name": "lab-09-backend",
+  "version": "1.0.0",
+  "description": "# City Explorer",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenvinh2/lab-09-backend.git"
+  },
+  "author": "Vinh Nguyen",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nguyenvinh2/lab-09-backend/issues"
+  },
+  "homepage": "https://github.com/nguyenvinh2/lab-09-backend#readme"
+}
