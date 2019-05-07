@@ -5,47 +5,24 @@ const superagent = require('superagent');
 const cors = require('cors');
 const app = express();
 const pg = require('pg');
-
-app.use(cors());
 require('dotenv').config();
+
 const PORT = process.env.PORT || 3000;
-
 const client = new pg.Client(process.env.DATABASE_URL);
-client.connect();
 
+client.connect();
+app.use(cors());
 app.use(express.static('./'));
 
 app.get('/', (request, response) => {
   response.status(200).send('Connected!');
 });
-
 app.get('/location', queryLocation);
-
 app.get('/weather', weatherApp);
-
 app.get('/events', eventsApp);
-
 app.get('/movies', moviesApp);
-
 app.get('/yelp', yelpApp);
-
 app.get('/trails', trailsApp);
-
-//uses google API to fetch coordinate data to send to front end using superagent
-//has a catch method to handle bad user search inputs in case google maps cannot
-//find location
-function locationApp(request, response) {
-  const googleMapsUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
-  return superagent.get(googleMapsUrl)
-    .then(result => {
-      const location = new Location(request, result);
-      let insertSQL = 'INSERT INTO locations ( search_query, formatted_query, latitude, longitude, created_at ) VALUES ( $1, $2, $3, $4, $5);';
-      let insertParams = [location.search_query, location.formatted_query, location.latitude, location.longitude, location.created_at];
-      client.query(insertSQL, insertParams);
-      queryLocation(request, response);
-    })
-    .catch(error => handleError(error, response));
-}
 
 //This section is for querying database
 function queryLocation(request, response) {
@@ -56,7 +33,7 @@ function queryLocation(request, response) {
       if (result.rowCount > 0) {
         response.send(result.rows[0]);
       } else {
-        locationApp(request, response);
+        getLocationAPI(request, response);
       }
     })
     .catch(error => handleError(error, response));
@@ -76,7 +53,7 @@ function queryTable(table, request, response) {
     })
     .catch(error => handleError(error, response));
 }
-// ------------------------------------------
+// ------------------------------------------------------------------------------
 
 // This section is handling GET routes
 function weatherApp(req, res) {
@@ -108,8 +85,22 @@ function trailsApp(req, res) {
   trails.cacheMiss = getTrailsAPI;
   queryTable(trails, req, res);
 }
+// ----------------------------------------------------------------------------
 
 // This section is for API retrieval
+function getLocationAPI(request, response) {
+  const googleMapsUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${request.query.data}&key=${process.env.GEOCODE_API_KEY}`;
+  return superagent.get(googleMapsUrl)
+    .then(result => {
+      const location = new Location(request, result);
+      let insertSQL = 'INSERT INTO locations ( search_query, formatted_query, latitude, longitude, created_at ) VALUES ( $1, $2, $3, $4, $5);';
+      let insertParams = [location.search_query, location.formatted_query, location.latitude, location.longitude, location.created_at];
+      client.query(insertSQL, insertParams);
+      queryLocation(request, response);
+    })
+    .catch(error => handleError(error, response));
+}
+
 function getWeatherAPI(req, res) {
   const darkSkyUrl = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
   return superagent.get(darkSkyUrl)
@@ -191,11 +182,7 @@ function getTrailsAPI(req, res) {
     })
     .catch(error => handleError(error, res));
 }
-
-function handleError(err, res) {
-  if (err) res.status(500).send('Internal 500 error!');
-}
-
+// ----------------------------------------------------------------------------
 
 // This section is for constructors
 function Weather(day) {
@@ -204,7 +191,6 @@ function Weather(day) {
   this.created_at = Date.now();
 }
 
-//Refactored to pass more concise arguments
 function Location(request, result) {
   this.search_query = request.query.data;
   this.formatted_query = result.body.results[0].formatted_address;
@@ -269,10 +255,16 @@ function Options(tableName, time, request, response) {
     }
   };
 }
+// ----------------------------------------------------------------------------
 
+//Miscellaneous Helper Functions
 function deleteTableContents(table, id) {
   const SQL = `DELETE from ${table} WHERE location_id=${id};`;
   return client.query(SQL);
 }
 
+function handleError(err, res) {
+  if (err) res.status(500).send('Internal 500 error!');
+}
+// ----------------------------------------------------------------------------
 app.listen(PORT, () => console.log(`Listening on ${PORT}`));
