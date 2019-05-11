@@ -95,8 +95,7 @@ function getLocationAPI(request, response) {
       const location = new Location(request, result);
       let insertSQL = 'INSERT INTO locations ( search_query, formatted_query, latitude, longitude, created_at ) VALUES ( $1, $2, $3, $4, $5);';
       let insertParams = [location.search_query, location.formatted_query, location.latitude, location.longitude, location.created_at];
-      client.query(insertSQL, insertParams);
-      queryLocation(request, response);
+      client.query(insertSQL, insertParams).then(()=> queryLocation(request, response));
     })
     .catch(error => handleError(error, response));
 }
